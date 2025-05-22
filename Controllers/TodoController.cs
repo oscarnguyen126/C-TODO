@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TodoApi.Models;
 
@@ -17,11 +17,58 @@ namespace TodoApi.Controllers
 
         // GET: api/todo
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<TodoItem>>> GetTodos()
+        public async Task<ActionResult<IEnumerable<TodoItem>>> GetTodos(
+            string? search,
+            bool? isCompleted,
+            int page = 1,
+            int pageSize = 10)
         {
-            var items = await _context.TodoItems.ToListAsync();
-            return Ok(items);
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _context.TodoItems.AsQueryable();
+
+            // Search by title
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(t => t.Title.Contains(search));
+            }
+
+            // Filter by status
+            if (isCompleted.HasValue)
+            {
+                query = query.Where(t => t.IsCompleted == isCompleted.Value);
+            }
+
+            // Total items
+            var totalItems = await query.CountAsync();
+
+            // Pagination
+            var items = await query
+                .OrderBy(t => t.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                totalItems,
+                page,
+                pageSize,
+                items
+            });
         }
+
+
+        //GET: api/todo/{id}
+        [HttpGet("{id}")]
+        public async Task<ActionResult<TodoItem>> GetTodoItem(int id)
+        {
+            var todo = await _context.TodoItems.FindAsync(id);
+            if (todo == null) return NotFound();
+            return Ok(todo);
+        }
+
 
         // GET: api/todo/completed
         [HttpGet("completed")]
